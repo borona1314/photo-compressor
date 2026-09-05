@@ -122,6 +122,43 @@
     white-space: nowrap;
   }
   .empty { text-align: center; color: var(--sub); font-size: 13px; padding: 20px 0; }
+  .mode-toggle {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 14px;
+    font-size: 13px;
+  }
+  .mode-toggle label {
+    flex: 1;
+    text-align: center;
+    padding: 8px 4px;
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    color: var(--sub);
+  }
+  .mode-toggle input { margin-right: 4px; accent-color: var(--accent); }
+  .num-input {
+    width: 52px;
+    text-align: right;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 3px 6px;
+    font-size: 14px;
+  }
+  .size-input {
+    flex: 1;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px;
+    font-size: 14px;
+  }
+  .size-select {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px;
+    font-size: 14px;
+    background: white;
+  }
   .note {
     font-size: 12px;
     color: var(--sub);
@@ -150,9 +187,31 @@
   </div>
 
   <div class="card">
-    <div class="row"><span>ระดับคุณภาพ</span><span id="qualityVal">80%</span></div>
-    <input type="range" id="qualitySlider" min="40" max="95" value="80">
-    <div class="hint">ค่าสูง = ไฟล์ใหญ่กว่า แต่คมชัดกว่า • 75–85% คือจุดคุ้มสุด</div>
+    <div class="mode-toggle">
+      <label><input type="radio" name="mode" value="quality" checked> ตั้งคุณภาพ (%)</label>
+      <label><input type="radio" name="mode" value="targetSize"> ตั้งขนาดไฟล์เป้าหมาย</label>
+    </div>
+
+    <div id="qualityControls">
+      <div class="row">
+        <span>ระดับคุณภาพ</span>
+        <span><input type="number" id="qualityNumber" min="20" max="95" value="80" class="num-input">%</span>
+      </div>
+      <input type="range" id="qualitySlider" min="20" max="95" value="80">
+      <div class="hint">ค่าสูง = ไฟล์ใหญ่กว่า แต่คมชัดกว่า • ต่ำสุด 20%</div>
+    </div>
+
+    <div id="targetSizeControls" style="display:none">
+      <div class="row"><span>ขนาดไฟล์เป้าหมาย</span></div>
+      <div style="display:flex; gap:8px; margin-top:6px;">
+        <input type="number" id="targetSizeNumber" min="1" value="500" class="size-input">
+        <select id="targetSizeUnit" class="size-select">
+          <option value="KB" selected>KB</option>
+          <option value="MB">MB</option>
+        </select>
+      </div>
+      <div class="hint">ระบบจะปรับคุณภาพ (และลดขนาดภาพถ้าจำเป็น) ให้ไฟล์ไม่เกินขนาดนี้โดยอัตโนมัติ</div>
+    </div>
   </div>
 
   <div class="card">
@@ -160,11 +219,11 @@
       <div class="empty">ยังไม่ได้เลือกรูป</div>
     </div>
     <button class="btn" id="processBtn" disabled>บีบอัดรูปทั้งหมด</button>
-    <button class="btn secondary" id="downloadAllBtn" style="display:none">ดาวน์โหลดทั้งหมด</button>
+    <button class="btn secondary" id="downloadAllBtn" style="display:none">บันทึกทั้งหมดลงอัลบั้มรูป</button>
   </div>
 
   <div class="note">
-    ⚠️ ไฟล์ที่ได้จะตั้งชื่อเป็น <b>YYMMDD_ชื่อเดิม.jpg</b> โดยดึงวันที่จาก EXIF ในรูป (วันที่ถ่ายจริง) ถ้ารูปไหนไม่มี EXIF จะใช้วันที่แก้ไขไฟล์แทน • ไฟล์ที่ดาวน์โหลดจะมี "วันที่แก้ไข" เป็นวันนี้เสมอ (เขียนทับ metadata วันที่ของไฟล์ไม่ได้ — เป็นข้อจำกัดของ Safari) แต่ชื่อไฟล์จะขึ้นต้นด้วยวันที่ถ่ายจริงตามที่ต้องการ
+    ⚠️ ไฟล์ที่ได้จะตั้งชื่อเป็น <b>YYMMDD_ชื่อเดิม.jpg</b> โดยดึงวันที่จาก EXIF ในรูป (วันที่ถ่ายจริง) ถ้ารูปไหนไม่มี EXIF จะใช้วันที่แก้ไขไฟล์แทน • ปุ่ม "บันทึกทั้งหมดลงอัลบั้มรูป" จะเปิดหน้าต่างแชร์ของ iOS ให้เลือก "Save X Images" เพื่อเซฟลง Photos ทีเดียวทุกรูป (ถ้าเบราว์เซอร์ไม่รองรับ ระบบจะดาวน์โหลดให้ทีละไฟล์แทน)
   </div>
 
 </div>
@@ -176,14 +235,39 @@ let outNames = [];
 
 const fileInput = document.getElementById('fileInput');
 const qualitySlider = document.getElementById('qualitySlider');
-const qualityVal = document.getElementById('qualityVal');
+const qualityNumber = document.getElementById('qualityNumber');
+const targetSizeNumber = document.getElementById('targetSizeNumber');
+const targetSizeUnit = document.getElementById('targetSizeUnit');
+const qualityControls = document.getElementById('qualityControls');
+const targetSizeControls = document.getElementById('targetSizeControls');
+const modeRadios = document.querySelectorAll('input[name=mode]');
 const fileList = document.getElementById('fileList');
 const processBtn = document.getElementById('processBtn');
 const downloadAllBtn = document.getElementById('downloadAllBtn');
 
 qualitySlider.addEventListener('input', () => {
-  qualityVal.textContent = qualitySlider.value + '%';
+  qualityNumber.value = qualitySlider.value;
 });
+qualityNumber.addEventListener('input', () => {
+  let v = parseInt(qualityNumber.value, 10);
+  if (isNaN(v)) return;
+  v = Math.min(95, Math.max(20, v));
+  qualitySlider.value = v;
+});
+qualityNumber.addEventListener('blur', () => {
+  qualityNumber.value = qualitySlider.value;
+});
+
+modeRadios.forEach(r => r.addEventListener('change', () => {
+  if (!r.checked) return;
+  if (r.value === 'quality') {
+    qualityControls.style.display = 'block';
+    targetSizeControls.style.display = 'none';
+  } else {
+    qualityControls.style.display = 'none';
+    targetSizeControls.style.display = 'block';
+  }
+}));
 
 fileInput.addEventListener('change', (e) => {
   files = Array.from(e.target.files);
@@ -232,30 +316,65 @@ function renderList() {
   });
 }
 
-async function compressImage(file, quality) {
+async function compressImage(file, options) {
   return new Promise((resolve, reject) => {
     const img = new Image();
     const url = URL.createObjectURL(file);
     img.onload = () => {
-      try {
-        const canvas = document.createElement('canvas');
-        canvas.width = img.naturalWidth;
-        canvas.height = img.naturalHeight;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0);
-        // Always output JPEG — Safari cannot re-encode HEIC/WEBP via canvas.toBlob
-        canvas.toBlob((blob) => {
-          URL.revokeObjectURL(url);
-          if (!blob) {
-            reject(new Error('toBlob returned null (ไฟล์นี้แปลงไม่ได้)'));
-          } else {
-            resolve(blob);
-          }
-        }, 'image/jpeg', quality / 100);
-      } catch (err) {
-        URL.revokeObjectURL(url);
-        reject(err);
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+
+      function drawAtScale(scale) {
+        canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+        canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
       }
+
+      function toBlobAsync(q) {
+        return new Promise((res) => canvas.toBlob(res, 'image/jpeg', q));
+      }
+
+      (async () => {
+        try {
+          if (options.mode === 'quality') {
+            drawAtScale(1);
+            const blob = await toBlobAsync(options.quality / 100);
+            URL.revokeObjectURL(url);
+            if (!blob) return reject(new Error('toBlob returned null (ไฟล์นี้แปลงไม่ได้)'));
+            return resolve(blob);
+          }
+
+          // targetSize mode: binary-search quality at each scale, downscale if still too big
+          const scales = [1, 0.85, 0.7, 0.55, 0.4, 0.25];
+          let best = null;
+          for (const scale of scales) {
+            drawAtScale(scale);
+            let lo = 10, hi = 95;
+            for (let iter = 0; iter < 6; iter++) {
+              const q = Math.round((lo + hi) / 2);
+              const blob = await toBlobAsync(q / 100);
+              if (blob && blob.size <= options.targetBytes) {
+                best = blob;
+                lo = q + 1;
+              } else {
+                hi = q - 1;
+              }
+            }
+            if (best) break;
+          }
+          if (!best) {
+            drawAtScale(scales[scales.length - 1]);
+            best = await toBlobAsync(0.15);
+          }
+          URL.revokeObjectURL(url);
+          if (!best) return reject(new Error('toBlob returned null (ไฟล์นี้แปลงไม่ได้)'));
+          resolve(best);
+        } catch (err) {
+          URL.revokeObjectURL(url);
+          reject(err);
+        }
+      })();
     };
     img.onerror = () => {
       URL.revokeObjectURL(url);
@@ -268,7 +387,17 @@ async function compressImage(file, quality) {
 processBtn.addEventListener('click', async () => {
   processBtn.disabled = true;
   processBtn.textContent = 'กำลังบีบอัด...';
-  const quality = parseInt(qualitySlider.value, 10);
+
+  const mode = document.querySelector('input[name=mode]:checked').value;
+  let options;
+  if (mode === 'quality') {
+    options = { mode: 'quality', quality: parseInt(qualityNumber.value, 10) };
+  } else {
+    const num = parseFloat(targetSizeNumber.value);
+    const unit = targetSizeUnit.value;
+    const targetBytes = unit === 'MB' ? num * 1024 * 1024 : num * 1024;
+    options = { mode: 'targetSize', targetBytes };
+  }
 
   for (let i = 0; i < files.length; i++) {
     const sizeEl = document.getElementById('size-' + i);
@@ -277,7 +406,7 @@ processBtn.addEventListener('click', async () => {
       const outName = buildOutputName(photoDate, files[i].name);
       outNames[i] = outName;
 
-      const blob = await compressImage(files[i], quality);
+      const blob = await compressImage(files[i], options);
       results[i] = blob;
       sizeEl.innerHTML = formatSize(files[i].size) + ' → <span class="new">' + formatSize(blob.size) + '</span>'
         + '<br><span style="color:#8a8a8e">' + outName + '</span>';
@@ -530,13 +659,35 @@ function downloadFile(blob, filename) {
 }
 
 downloadAllBtn.addEventListener('click', async () => {
+  const shareFiles = [];
   for (let i = 0; i < results.length; i++) {
     if (results[i]) {
-      downloadFile(results[i], outNames[i] || (baseNameNoExt(files[i].name) + '.jpg'));
-      await new Promise(r => setTimeout(r, 400));
+      const name = outNames[i] || (baseNameNoExt(files[i].name) + '.jpg');
+      shareFiles.push(new File([results[i]], name, { type: 'image/jpeg' }));
     }
   }
+  if (shareFiles.length === 0) return;
+
+  if (navigator.canShare && navigator.canShare({ files: shareFiles })) {
+    try {
+      await navigator.share({ files: shareFiles, title: 'รูปที่บีบอัดแล้ว' });
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        await downloadSequentially(shareFiles);
+      }
+    }
+  } else {
+    await downloadSequentially(shareFiles);
+    alert('เบราว์เซอร์นี้ไม่รองรับการแชร์หลายไฟล์พร้อมกัน ระบบดาวน์โหลดให้ทีละไฟล์แทน — เปิด Files เลือกทั้งหมด → Share → Save to Photos ได้');
+  }
 });
+
+async function downloadSequentially(fileArr) {
+  for (const f of fileArr) {
+    downloadFile(f, f.name);
+    await new Promise(r => setTimeout(r, 400));
+  }
+}
 </script>
 
 </body>
