@@ -122,6 +122,35 @@
     white-space: nowrap;
   }
   .empty { text-align: center; color: var(--sub); font-size: 13px; padding: 20px 0; }
+  .list-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 13px;
+    color: var(--sub);
+    padding-bottom: 8px;
+    margin-bottom: 4px;
+    border-bottom: 1px solid var(--border);
+  }
+  .clear-all-btn {
+    background: none;
+    border: none;
+    color: #d92d20;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 4px 0;
+  }
+  .remove-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: none;
+    background: #f2f2f7;
+    color: #8a8a8e;
+    font-size: 14px;
+    line-height: 1;
+    flex-shrink: 0;
+  }
   .mode-toggle {
     display: flex;
     gap: 8px;
@@ -167,6 +196,24 @@
     padding: 10px 12px;
     margin-top: 14px;
     line-height: 1.5;
+  }
+  .section-title {
+    font-size: 15px;
+    font-weight: 700;
+    margin: 26px 0 4px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+  }
+  .video-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 8px;
+    background: #eef0f2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    flex-shrink: 0;
   }
 </style>
 </head>
@@ -224,6 +271,62 @@
 
   <div class="note">
     ⚠️ ไฟล์ที่ได้จะตั้งชื่อเป็น <b>YYMMDD_ชื่อเดิม.jpg</b> โดยดึงวันที่จาก EXIF ในรูป (วันที่ถ่ายจริง) ถ้ารูปไหนไม่มี EXIF จะใช้วันที่แก้ไขไฟล์แทน • ปุ่ม "บันทึกทั้งหมดลงอัลบั้มรูป" จะเปิดหน้าต่างแชร์ของ iOS ให้เลือก "Save X Images" เพื่อเซฟลง Photos ทีเดียวทุกรูป (ถ้าเบราว์เซอร์ไม่รองรับ ระบบจะดาวน์โหลดให้ทีละไฟล์แทน)
+  </div>
+
+  <div class="section-title">🎬 บีบอัดวิดีโอ</div>
+
+  <div class="card">
+    <label class="picker" id="videoPickerLabel">
+      <strong>แตะเพื่อเลือกวิดีโอ</strong><br>จาก Files หรือ Photos
+      <input type="file" id="videoInput" accept="video/*" multiple>
+    </label>
+  </div>
+
+  <div class="card">
+    <div class="mode-toggle">
+      <label><input type="radio" name="vmode" value="bitrate" checked> ตั้งบิตเรต</label>
+      <label><input type="radio" name="vmode" value="targetSize"> ตั้งขนาดไฟล์เป้าหมาย</label>
+    </div>
+
+    <div class="row"><span>ลดความละเอียด</span></div>
+    <select id="videoScale" class="size-select" style="width:100%; margin-bottom:12px;">
+      <option value="1" selected>เต็มขนาดเดิม (100%)</option>
+      <option value="0.75">75%</option>
+      <option value="0.5">50%</option>
+      <option value="0.25">25%</option>
+    </select>
+
+    <div id="bitrateControls">
+      <div class="row">
+        <span>บิตเรตวิดีโอ</span>
+        <span><input type="number" id="bitrateNumber" min="0.5" max="20" step="0.5" value="4" class="num-input" style="width:60px;"> Mbps</span>
+      </div>
+      <div class="hint">ค่าสูง = ไฟล์ใหญ่กว่าแต่คมชัดกว่า • วิดีโอมือถือทั่วไปใช้ 3–6 Mbps</div>
+    </div>
+
+    <div id="videoTargetSizeControls" style="display:none">
+      <div class="row"><span>ขนาดไฟล์เป้าหมาย</span></div>
+      <div style="display:flex; gap:8px; margin-top:6px;">
+        <input type="number" id="videoTargetSizeNumber" min="1" value="10" class="size-input">
+        <select id="videoTargetSizeUnit" class="size-select">
+          <option value="MB" selected>MB</option>
+          <option value="KB">KB</option>
+        </select>
+      </div>
+      <div class="hint">ระบบคำนวณบิตเรตจากความยาววิดีโอให้ใกล้เคียงเป้าหมาย (ไม่เป๊ะ 100%)</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div id="videoList">
+      <div class="empty">ยังไม่ได้เลือกวิดีโอ</div>
+    </div>
+    <button class="btn" id="videoProcessBtn" disabled>บีบอัดวิดีโอทั้งหมด</button>
+    <button class="btn secondary" id="videoDownloadAllBtn" style="display:none">บันทึกทั้งหมดลงอัลบั้มรูป</button>
+  </div>
+
+  <div class="note">
+    ⚠️ <b>บีบวิดีโอทำงานแบบเรียลไทม์</b> — ระบบต้อง "เล่น" คลิปทั้งคลิปขณะบันทึกใหม่ ดังนั้นวิดีโอยาวเท่าไหร่ ก็ใช้เวลาบีบเท่านั้น เปิดหน้าจอ Safari ค้างไว้จนเสร็จ (ห้ามล็อกจอ/สลับแอป ไม่งั้นจะหยุดกลางคัน) ไฟล์ผลลัพธ์เป็น .mp4 หรือ .webm ตามที่เบราว์เซอร์รองรับ ฟีเจอร์นี้ยังใหม่ ถ้าเจอปัญหาเสียงหายหรือคุณภาพผิดปกติ แจ้งได้เลย
   </div>
 
 </div>
@@ -290,6 +393,19 @@ function renderList() {
     return;
   }
   fileList.innerHTML = '';
+
+  const header = document.createElement('div');
+  header.className = 'list-header';
+  const label = document.createElement('span');
+  label.textContent = 'เลือกแล้ว ' + files.length + ' รูป';
+  const clearBtn = document.createElement('button');
+  clearBtn.className = 'clear-all-btn';
+  clearBtn.textContent = 'ลบทั้งหมด';
+  clearBtn.onclick = clearAllFiles;
+  header.appendChild(label);
+  header.appendChild(clearBtn);
+  fileList.appendChild(header);
+
   files.forEach((file, i) => {
     const item = document.createElement('div');
     item.className = 'file-item';
@@ -310,10 +426,36 @@ function renderList() {
 
     info.appendChild(name);
     info.appendChild(size);
+
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'remove-btn';
+    removeBtn.textContent = '✕';
+    removeBtn.onclick = () => removeFileAt(i);
+
     item.appendChild(thumb);
     item.appendChild(info);
+    item.appendChild(removeBtn);
     fileList.appendChild(item);
   });
+}
+
+function removeFileAt(i) {
+  files.splice(i, 1);
+  results.splice(i, 1);
+  outNames.splice(i, 1);
+  renderList();
+  processBtn.disabled = files.length === 0;
+  if (results.every(r => !r)) downloadAllBtn.style.display = 'none';
+}
+
+function clearAllFiles() {
+  files = [];
+  results = [];
+  outNames = [];
+  fileInput.value = '';
+  renderList();
+  processBtn.disabled = true;
+  downloadAllBtn.style.display = 'none';
 }
 
 async function compressImage(file, options) {
@@ -688,6 +830,296 @@ async function downloadSequentially(fileArr) {
     await new Promise(r => setTimeout(r, 400));
   }
 }
+
+/* ============ VIDEO COMPRESSION ============ */
+
+let videoFiles = [];
+let videoResults = [];
+let videoOutNames = [];
+let wakeLock = null;
+
+const videoInput = document.getElementById('videoInput');
+const videoScale = document.getElementById('videoScale');
+const bitrateNumber = document.getElementById('bitrateNumber');
+const bitrateControls = document.getElementById('bitrateControls');
+const videoTargetSizeControls = document.getElementById('videoTargetSizeControls');
+const videoTargetSizeNumber = document.getElementById('videoTargetSizeNumber');
+const videoTargetSizeUnit = document.getElementById('videoTargetSizeUnit');
+const vmodeRadios = document.querySelectorAll('input[name=vmode]');
+const videoList = document.getElementById('videoList');
+const videoProcessBtn = document.getElementById('videoProcessBtn');
+const videoDownloadAllBtn = document.getElementById('videoDownloadAllBtn');
+
+vmodeRadios.forEach(r => r.addEventListener('change', () => {
+  if (!r.checked) return;
+  if (r.value === 'bitrate') {
+    bitrateControls.style.display = 'block';
+    videoTargetSizeControls.style.display = 'none';
+  } else {
+    bitrateControls.style.display = 'none';
+    videoTargetSizeControls.style.display = 'block';
+  }
+}));
+
+videoInput.addEventListener('change', (e) => {
+  videoFiles = Array.from(e.target.files);
+  videoResults = new Array(videoFiles.length).fill(null);
+  videoOutNames = new Array(videoFiles.length).fill(null);
+  renderVideoList();
+  videoProcessBtn.disabled = videoFiles.length === 0;
+  videoDownloadAllBtn.style.display = 'none';
+});
+
+function renderVideoList() {
+  if (videoFiles.length === 0) {
+    videoList.innerHTML = '<div class="empty">ยังไม่ได้เลือกวิดีโอ</div>';
+    return;
+  }
+  videoList.innerHTML = '';
+
+  const header = document.createElement('div');
+  header.className = 'list-header';
+  const label = document.createElement('span');
+  label.textContent = 'เลือกแล้ว ' + videoFiles.length + ' ไฟล์';
+  const clearBtn = document.createElement('button');
+  clearBtn.className = 'clear-all-btn';
+  clearBtn.textContent = 'ลบทั้งหมด';
+  clearBtn.onclick = clearAllVideos;
+  header.appendChild(label);
+  header.appendChild(clearBtn);
+  videoList.appendChild(header);
+
+  videoFiles.forEach((file, i) => {
+    const item = document.createElement('div');
+    item.className = 'file-item';
+    item.id = 'vitem-' + i;
+
+    const icon = document.createElement('div');
+    icon.className = 'video-icon';
+    icon.textContent = '🎬';
+
+    const info = document.createElement('div');
+    info.className = 'file-info';
+    const name = document.createElement('div');
+    name.className = 'file-name';
+    name.textContent = file.name;
+    const size = document.createElement('div');
+    size.className = 'file-size';
+    size.id = 'vsize-' + i;
+    size.textContent = formatSize(file.size);
+
+    info.appendChild(name);
+    info.appendChild(size);
+
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'remove-btn';
+    removeBtn.textContent = '✕';
+    removeBtn.onclick = () => removeVideoAt(i);
+
+    item.appendChild(icon);
+    item.appendChild(info);
+    item.appendChild(removeBtn);
+    videoList.appendChild(item);
+  });
+}
+
+function removeVideoAt(i) {
+  videoFiles.splice(i, 1);
+  videoResults.splice(i, 1);
+  videoOutNames.splice(i, 1);
+  renderVideoList();
+  videoProcessBtn.disabled = videoFiles.length === 0;
+  if (videoResults.every(r => !r)) videoDownloadAllBtn.style.display = 'none';
+}
+
+function clearAllVideos() {
+  videoFiles = [];
+  videoResults = [];
+  videoOutNames = [];
+  videoInput.value = '';
+  renderVideoList();
+  videoProcessBtn.disabled = true;
+  videoDownloadAllBtn.style.display = 'none';
+}
+
+function pickVideoMimeType() {
+  const candidates = [
+    'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+    'video/mp4',
+    'video/webm;codecs=vp9,opus',
+    'video/webm;codecs=vp8,opus',
+    'video/webm'
+  ];
+  for (const c of candidates) {
+    if (window.MediaRecorder && MediaRecorder.isTypeSupported(c)) return c;
+  }
+  return '';
+}
+
+function videoExtFromMime(mimeType) {
+  return mimeType.indexOf('mp4') !== -1 ? 'mp4' : 'webm';
+}
+
+function buildVideoOutputName(date, originalName, ext) {
+  return formatDatePrefix(date) + '_' + baseNameNoExt(originalName) + '.' + ext;
+}
+
+async function requestWakeLock() {
+  try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); }
+  catch (err) { /* ignore, not critical */ }
+}
+function releaseWakeLock() {
+  try { if (wakeLock) { wakeLock.release(); wakeLock = null; } } catch (err) { /* ignore */ }
+}
+
+async function compressVideo(file, options, onProgress) {
+  return new Promise((resolve, reject) => {
+    const mimeType = pickVideoMimeType();
+    if (!mimeType) return reject(new Error('เบราว์เซอร์นี้ไม่รองรับการบันทึกวิดีโอ (MediaRecorder)'));
+
+    const videoEl = document.createElement('video');
+    const url = URL.createObjectURL(file);
+    videoEl.src = url;
+    videoEl.muted = true;
+    videoEl.playsInline = true;
+    videoEl.preload = 'auto';
+
+    videoEl.onloadedmetadata = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(2, Math.round(videoEl.videoWidth * options.scale));
+        canvas.height = Math.max(2, Math.round(videoEl.videoHeight * options.scale));
+        const ctx = canvas.getContext('2d');
+
+        let videoBitsPerSecond, audioBitsPerSecond = 128000;
+        if (options.mode === 'bitrate') {
+          videoBitsPerSecond = Math.round(options.mbps * 1000000);
+        } else {
+          const duration = Math.max(0.5, videoEl.duration || 1);
+          const totalBits = options.targetBytes * 8 * 0.9;
+          audioBitsPerSecond = Math.min(128000, Math.max(32000, totalBits * 0.1 / duration));
+          videoBitsPerSecond = Math.max(200000, Math.round((totalBits / duration) - audioBitsPerSecond));
+        }
+
+        const canvasStream = canvas.captureStream(30);
+        let audioTracks = [];
+        try {
+          const srcStream = videoEl.captureStream ? videoEl.captureStream() : (videoEl.webkitCaptureStream ? videoEl.webkitCaptureStream() : null);
+          if (srcStream) audioTracks = srcStream.getAudioTracks();
+        } catch (err) { /* no audio available, proceed video-only */ }
+
+        const combined = new MediaStream([...canvasStream.getVideoTracks(), ...audioTracks]);
+        const recorder = new MediaRecorder(combined, { mimeType, videoBitsPerSecond, audioBitsPerSecond });
+        const chunks = [];
+        recorder.ondataavailable = (e) => { if (e.data && e.data.size > 0) chunks.push(e.data); };
+        recorder.onstop = () => {
+          URL.revokeObjectURL(url);
+          resolve(new Blob(chunks, { type: mimeType }));
+        };
+        recorder.onerror = (e) => {
+          URL.revokeObjectURL(url);
+          reject(e.error || new Error('MediaRecorder error'));
+        };
+
+        let drawing = true;
+        function drawLoop() {
+          if (!drawing) return;
+          ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+          if (onProgress && videoEl.duration) onProgress(videoEl.currentTime / videoEl.duration);
+          requestAnimationFrame(drawLoop);
+        }
+
+        videoEl.onended = () => { drawing = false; try { recorder.stop(); } catch (err) {} };
+        videoEl.onerror = () => { drawing = false; try { recorder.stop(); } catch (err) {}; reject(new Error('เล่นวิดีโอไม่ได้ (ไฟล์อาจเสียหายหรือฟอร์แมตไม่รองรับ)')); };
+
+        recorder.start(500);
+        videoEl.play().then(drawLoop).catch((err) => {
+          drawing = false;
+          reject(new Error('เล่นวิดีโอไม่ได้: ' + err.message));
+        });
+      } catch (err) {
+        URL.revokeObjectURL(url);
+        reject(err);
+      }
+    };
+  });
+}
+
+videoProcessBtn.addEventListener('click', async () => {
+  videoProcessBtn.disabled = true;
+  await requestWakeLock();
+
+  const scale = parseFloat(videoScale.value);
+  const vmode = document.querySelector('input[name=vmode]:checked').value;
+  let options = { scale };
+  if (vmode === 'bitrate') {
+    options.mode = 'bitrate';
+    options.mbps = parseFloat(bitrateNumber.value);
+  } else {
+    const num = parseFloat(videoTargetSizeNumber.value);
+    const unit = videoTargetSizeUnit.value;
+    options.mode = 'targetSize';
+    options.targetBytes = unit === 'MB' ? num * 1024 * 1024 : num * 1024;
+  }
+
+  try {
+    for (let i = 0; i < videoFiles.length; i++) {
+      videoProcessBtn.textContent = 'กำลังบีบวิดีโอ ' + (i + 1) + '/' + videoFiles.length + '...';
+      const sizeEl = document.getElementById('vsize-' + i);
+      try {
+        const blob = await compressVideo(videoFiles[i], options, (frac) => {
+          sizeEl.innerHTML = formatSize(videoFiles[i].size) + ' → กำลังบีบ ' + Math.round(frac * 100) + '%';
+        });
+        const ext = videoExtFromMime(blob.type);
+        const date = new Date(videoFiles[i].lastModified);
+        const outName = buildVideoOutputName(date, videoFiles[i].name, ext);
+        videoResults[i] = blob;
+        videoOutNames[i] = outName;
+        sizeEl.innerHTML = formatSize(videoFiles[i].size) + ' → <span class="new">' + formatSize(blob.size) + '</span>'
+          + '<br><span style="color:#8a8a8e">' + outName + '</span>';
+
+        const item = document.getElementById('vitem-' + i);
+        if (!item.querySelector('.dl-btn')) {
+          const btn = document.createElement('button');
+          btn.className = 'dl-btn';
+          btn.textContent = 'บันทึก';
+          btn.onclick = () => downloadFile(blob, outName);
+          item.appendChild(btn);
+        }
+      } catch (err) {
+        sizeEl.innerHTML = '<span style="color:#d92d20">พลาด: ' + err.message + '</span>';
+      }
+    }
+  } finally {
+    releaseWakeLock();
+  }
+
+  videoProcessBtn.textContent = 'บีบอัดวิดีโอทั้งหมด';
+  videoProcessBtn.disabled = false;
+  videoDownloadAllBtn.style.display = 'block';
+});
+
+videoDownloadAllBtn.addEventListener('click', async () => {
+  const shareFiles = [];
+  for (let i = 0; i < videoResults.length; i++) {
+    if (videoResults[i]) {
+      const name = videoOutNames[i] || ('video_' + i + '.' + videoExtFromMime(videoResults[i].type));
+      shareFiles.push(new File([videoResults[i]], name, { type: videoResults[i].type }));
+    }
+  }
+  if (shareFiles.length === 0) return;
+
+  if (navigator.canShare && navigator.canShare({ files: shareFiles })) {
+    try {
+      await navigator.share({ files: shareFiles, title: 'วิดีโอที่บีบอัดแล้ว' });
+    } catch (err) {
+      if (err.name !== 'AbortError') await downloadSequentially(shareFiles);
+    }
+  } else {
+    await downloadSequentially(shareFiles);
+    alert('เบราว์เซอร์นี้ไม่รองรับการแชร์หลายไฟล์พร้อมกัน ระบบดาวน์โหลดให้ทีละไฟล์แทน');
+  }
+});
 </script>
 
 </body>
