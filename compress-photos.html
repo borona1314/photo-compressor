@@ -164,7 +164,7 @@
   </div>
 
   <div class="note">
-    ⚠️ <b>ข้อจำกัดของ iOS Safari:</b> ไฟล์ที่ดาวน์โหลดออกมาจะมี "วันที่แก้ไข" เป็นวันนี้ (เขียนทับวันที่เดิมของไฟล์ไม่ได้) แต่<b>ชื่อไฟล์จะเหมือนเดิมทุกตัวอักษร</b> เมื่อกด "ดาวน์โหลด" ให้เลือก "Save to Files" แล้วเลือกโฟลเดอร์เดิม ระบบจะถามว่าจะ Replace (แทนที่) ไฟล์เดิมหรือไม่ — เลือก Replace เพื่อทับของเดิม
+    ⚠️ ไฟล์ที่ได้จะตั้งชื่อเป็น <b>YYMMDD_ชื่อเดิม.jpg</b> โดยดึงวันที่จาก EXIF ในรูป (วันที่ถ่ายจริง) ถ้ารูปไหนไม่มี EXIF จะใช้วันที่แก้ไขไฟล์แทน • ไฟล์ที่ดาวน์โหลดจะมี "วันที่แก้ไข" เป็นวันนี้เสมอ (เขียนทับ metadata วันที่ของไฟล์ไม่ได้ — เป็นข้อจำกัดของ Safari) แต่ชื่อไฟล์จะขึ้นต้นด้วยวันที่ถ่ายจริงตามที่ต้องการ
   </div>
 
 </div>
@@ -172,6 +172,7 @@
 <script>
 let files = [];
 let results = [];
+let outNames = [];
 
 const fileInput = document.getElementById('fileInput');
 const qualitySlider = document.getElementById('qualitySlider');
@@ -187,6 +188,7 @@ qualitySlider.addEventListener('input', () => {
 fileInput.addEventListener('change', (e) => {
   files = Array.from(e.target.files);
   results = new Array(files.length).fill(null);
+  outNames = new Array(files.length).fill(null);
   renderList();
   processBtn.disabled = files.length === 0;
   downloadAllBtn.style.display = 'none';
@@ -271,14 +273,18 @@ processBtn.addEventListener('click', async () => {
   for (let i = 0; i < files.length; i++) {
     const sizeEl = document.getElementById('size-' + i);
     try {
+      const photoDate = await getPhotoDate(files[i]);
+      const outName = buildOutputName(photoDate, files[i].name);
+      outNames[i] = outName;
+
       const blob = await compressImage(files[i], quality);
       results[i] = blob;
-      sizeEl.innerHTML = formatSize(files[i].size) + ' → <span class="new">' + formatSize(blob.size) + '</span>';
+      sizeEl.innerHTML = formatSize(files[i].size) + ' → <span class="new">' + formatSize(blob.size) + '</span>'
+        + '<br><span style="color:#8a8a8e">' + outName + '</span>';
 
       // add individual download button
       const item = document.getElementById('item-' + i);
       if (!item.querySelector('.dl-btn')) {
-        const outName = jpegName(files[i].name);
         const btn = document.createElement('button');
         btn.className = 'dl-btn';
         btn.textContent = 'บันทึก';
@@ -295,10 +301,223 @@ processBtn.addEventListener('click', async () => {
   downloadAllBtn.style.display = 'block';
 });
 
-function jpegName(originalName) {
+function baseNameNoExt(originalName) {
   const dot = originalName.lastIndexOf('.');
-  const base = dot > 0 ? originalName.substring(0, dot) : originalName;
-  return base + '.jpg';
+  return dot > 0 ? originalName.substring(0, dot) : originalName;
+}
+
+function formatDatePrefix(date) {
+  const pad = n => String(n).padStart(2, '0');
+  return String(date.getFullYear()).slice(-2) + pad(date.getMonth() + 1) + pad(date.getDate());
+}
+
+function buildOutputName(date, originalName) {
+  return formatDatePrefix(date) + '_' + baseNameNoExt(originalName) + '.jpg';
+}
+
+function readAscii(view, offset, length) {
+  let str = '';
+  for (let i = 0; i < length; i++) {
+    const c = view.getUint8(offset + i);
+    if (c === 0) break;
+    str += String.fromCharCode(c);
+  }
+  return str;
+}
+
+function parseDateString(str) {
+  const m = str.match(/^(\d{4}):(\d{2}):(\d{2})/);
+  if (!m) return null;
+  const d = new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10));
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function readIFD(view, little, ifdAbs) {
+  const numEntries = view.getUint16(ifdAbs, little);
+  const entries = [];
+  for (let i = 0; i < numEntries; i++) {
+    const entryOffset = ifdAbs + 2 + i * 12;
+    entries.push({
+      tag: view.getUint16(entryOffset, little),
+      type: view.getUint16(entryOffset + 2, little),
+      count: view.getUint32(entryOffset + 4, little),
+      valueFieldOffset: entryOffset + 8
+    });
+  }
+  return entries;
+}
+
+function entryDataOffset(view, entry, tiffStart, little) {
+  const typeSizes = { 1: 1, 2: 1, 3: 2, 4: 4, 5: 8, 7: 1, 9: 4, 10: 8 };
+  const size = (typeSizes[entry.type] || 1) * entry.count;
+  if (size <= 4) return entry.valueFieldOffset;
+  return tiffStart + view.getUint32(entry.valueFieldOffset, little);
+}
+
+function parseExifDateFromTiff(view, tiffStart) {
+  try {
+    const byteOrder = view.getUint16(tiffStart, false);
+    const little = byteOrder === 0x4949;
+    if (view.getUint16(tiffStart + 2, little) !== 0x002A) return null;
+    const ifd0Offset = tiffStart + view.getUint32(tiffStart + 4, little);
+    const ifd0Entries = readIFD(view, little, ifd0Offset);
+    let dateTimeStr = null, exifIfdOffset = null;
+    for (const e of ifd0Entries) {
+      if (e.tag === 0x8769) exifIfdOffset = tiffStart + view.getUint32(e.valueFieldOffset, little);
+      if (e.tag === 0x0132 && e.type === 2) {
+        const off = entryDataOffset(view, e, tiffStart, little);
+        dateTimeStr = readAscii(view, off, e.count);
+      }
+    }
+    if (exifIfdOffset) {
+      const exifEntries = readIFD(view, little, exifIfdOffset);
+      for (const e of exifEntries) {
+        if (e.tag === 0x9003 && e.type === 2) {
+          const off = entryDataOffset(view, e, tiffStart, little);
+          dateTimeStr = readAscii(view, off, e.count);
+          break;
+        }
+      }
+    }
+    return dateTimeStr ? parseDateString(dateTimeStr) : null;
+  } catch (err) { return null; }
+}
+
+function parseJpegExifDate(view) {
+  try {
+    let offset = 2;
+    while (offset < view.byteLength - 4) {
+      if (view.getUint8(offset) !== 0xFF) break;
+      const marker = view.getUint8(offset + 1);
+      if (marker === 0xE1) {
+        const size = view.getUint16(offset + 2, false);
+        if (readAscii(view, offset + 4, 4) === 'Exif') {
+          return parseExifDateFromTiff(view, offset + 4 + 6);
+        }
+        offset += 2 + size;
+      } else if (marker === 0xD8 || (marker >= 0xD0 && marker <= 0xD9)) {
+        offset += 2;
+      } else if (marker === 0xDA) {
+        break; // start of scan, no more markers
+      } else {
+        const size = view.getUint16(offset + 2, false);
+        offset += 2 + size;
+      }
+    }
+    return null;
+  } catch (err) { return null; }
+}
+
+function parseHeicExifDate(view) {
+  try {
+    function readBoxHeader(pos) {
+      let size = view.getUint32(pos, false);
+      const type = readAscii(view, pos + 4, 4);
+      let headerSize = 8;
+      if (size === 1) { size = Number(view.getBigUint64(pos + 8, false)); headerSize = 16; }
+      return { size, type, headerSize };
+    }
+    let pos = 0, metaStart = null, metaEnd = null;
+    while (pos < view.byteLength - 8) {
+      const { size, type, headerSize } = readBoxHeader(pos);
+      if (size <= 0) break;
+      if (type === 'meta') { metaStart = pos + headerSize + 4; metaEnd = pos + size; break; }
+      pos += size;
+    }
+    if (metaStart === null) return null;
+
+    let p = metaStart, iinfStart = null, iinfEnd = null, ilocStart = null, ilocEnd = null;
+    while (p < metaEnd - 8) {
+      const { size, type, headerSize } = readBoxHeader(p);
+      if (size <= 0) break;
+      if (type === 'iinf') { iinfStart = p + headerSize; iinfEnd = p + size; }
+      if (type === 'iloc') { ilocStart = p + headerSize; ilocEnd = p + size; }
+      p += size;
+    }
+    if (iinfStart === null || ilocStart === null) return null;
+
+    // parse iinf → find item id whose type is 'Exif'
+    let ip = iinfStart;
+    const iinfVersion = view.getUint8(ip);
+    ip += 4;
+    let entryCount;
+    if (iinfVersion === 0) { entryCount = view.getUint16(ip, false); ip += 2; }
+    else { entryCount = view.getUint32(ip, false); ip += 4; }
+    let exifItemId = null;
+    for (let i = 0; i < entryCount && ip < iinfEnd; i++) {
+      const size = view.getUint32(ip, false);
+      const infeStart = ip + 8;
+      const infeVersion = view.getUint8(infeStart);
+      let itemId, itemType;
+      if (infeVersion === 2) {
+        itemId = view.getUint16(infeStart + 4, false);
+        itemType = readAscii(view, infeStart + 8, 4);
+      } else if (infeVersion === 3) {
+        itemId = view.getUint32(infeStart + 4, false);
+        itemType = readAscii(view, infeStart + 10, 4);
+      }
+      if (itemType === 'Exif') exifItemId = itemId;
+      ip += size;
+    }
+    if (exifItemId === null) return null;
+
+    // parse iloc → find data offset/length for that item
+    let lp = ilocStart;
+    const ilocVersion = view.getUint8(lp);
+    lp += 4;
+    const sb1 = view.getUint8(lp); lp += 1;
+    const offsetSize = sb1 >> 4, lengthSize = sb1 & 0xF;
+    const sb2 = view.getUint8(lp); lp += 1;
+    const baseOffsetSize = sb2 >> 4, indexSize = sb2 & 0xF;
+    let itemCount;
+    if (ilocVersion < 2) { itemCount = view.getUint16(lp, false); lp += 2; }
+    else { itemCount = view.getUint32(lp, false); lp += 4; }
+
+    function readN(offset, n) {
+      if (n === 0) return 0;
+      if (n === 2) return view.getUint16(offset, false);
+      if (n === 4) return view.getUint32(offset, false);
+      if (n === 8) return Number(view.getBigUint64(offset, false));
+      return 0;
+    }
+
+    let exifOffset = null;
+    for (let i = 0; i < itemCount; i++) {
+      let itemId;
+      if (ilocVersion < 2) { itemId = view.getUint16(lp, false); lp += 2; } else { itemId = view.getUint32(lp, false); lp += 4; }
+      if (ilocVersion === 1 || ilocVersion === 2) lp += 2; // construction_method
+      lp += 2; // data_reference_index
+      const baseOffset = readN(lp, baseOffsetSize); lp += baseOffsetSize;
+      const extentCount = view.getUint16(lp, false); lp += 2;
+      let firstOff = null;
+      for (let e = 0; e < extentCount; e++) {
+        if (indexSize > 0) lp += indexSize;
+        const extOffset = readN(lp, offsetSize); lp += offsetSize;
+        lp += lengthSize; // extent length, unused
+        if (e === 0) firstOff = extOffset;
+      }
+      if (itemId === exifItemId) exifOffset = baseOffset + firstOff;
+    }
+    if (exifOffset === null) return null;
+
+    const tiffHeaderOffsetVal = view.getUint32(exifOffset, false);
+    return parseExifDateFromTiff(view, exifOffset + 4 + tiffHeaderOffsetVal);
+  } catch (err) { return null; }
+}
+
+async function getPhotoDate(file) {
+  try {
+    const buffer = await file.arrayBuffer();
+    const view = new DataView(buffer);
+    let date = null;
+    if (view.byteLength > 12 && view.getUint16(0, false) === 0xFFD8) {
+      date = parseJpegExifDate(view);
+    } else if (view.byteLength > 12 && readAscii(view, 4, 4) === 'ftyp') {
+      date = parseHeicExifDate(view);
+    }
+    if (date) return date;
+  } catch (err) { /* fall through */ }
+  return new Date(file.lastModified);
 }
 
 function downloadFile(blob, filename) {
@@ -313,7 +532,7 @@ function downloadFile(blob, filename) {
 downloadAllBtn.addEventListener('click', async () => {
   for (let i = 0; i < results.length; i++) {
     if (results[i]) {
-      downloadFile(results[i], jpegName(files[i].name));
+      downloadFile(results[i], outNames[i] || (baseNameNoExt(files[i].name) + '.jpg'));
       await new Promise(r => setTimeout(r, 400));
     }
   }
